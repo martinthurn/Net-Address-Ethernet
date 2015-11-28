@@ -36,7 +36,7 @@ use constant DEBUG_MATCH => 0;
 use vars qw( $DEBUG $VERSION @EXPORT_OK %EXPORT_TAGS );
 use base 'Exporter';
 
-$VERSION = 1.119;
+$VERSION = 1.123;
 
 $DEBUG = 0 || $ENV{N_A_E_DEBUG};
 
@@ -44,7 +44,6 @@ $DEBUG = 0 || $ENV{N_A_E_DEBUG};
 @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
 
 my @ahInfo;
-
 
 =item get_address
 
@@ -55,24 +54,68 @@ When called in array context, returns a 6-element list representing
 the 6 bytes of the address in decimal.  For example,
 (26,43,60,77,94,111).
 
+If any non-zero argument is given,
+debugging information will be printed to STDERR.
+
 =cut
 
 sub get_address
   {
-  my @a = get_addresses();
+  my @a = get_addresses(@_);
   _debug(" DDD in get_address, a is ", Dumper(\@a));
   # Even if none are active, we'll return the first one:
   my $sAddr = $a[0]->{sEthernet};
-  # Look through the list, returning the first active one:
+  # Look through the list, returning the first active one that has a
+  # non-loopback IP address assigned to it:
  TRY_ADDR:
   foreach my $rh (@a)
     {
-    if ($rh->{iActive})
+    my $sName = $rh->{sAdapter};
+    _debug(" DDD inspecting interface $sName...\n");
+    if (! $rh->{iActive})
       {
-      next TRY_ADDR if (($rh->{sIP} || '') eq '127.0.0.1'); # 
-      $sAddr = $rh->{sEthernet};
-      last TRY_ADDR;
+      _debug(" DDD   but it is not active.\n");
+      next TRY_ADDR;
       } # if
+    _debug(" DDD   it is active...\n");
+    if (! exists $rh->{sIP})
+      {
+      _debug(" DDD   but it has no IP address.\n");
+      next TRY_ADDR;
+      } # if
+    if (! defined $rh->{sIP})
+      {
+      _debug(" DDD   but its IP address is undefined.\n");
+      next TRY_ADDR;
+      } # if
+    if ($rh->{sIP} eq '')
+      {
+      _debug(" DDD   but its IP address is empty.\n");
+      next TRY_ADDR;
+      } # if
+    if ($rh->{sIP} eq '127.0.0.1')
+      {
+      _debug(" DDD   but it's the loopback.\n");
+      next TRY_ADDR;
+      } # if
+    if (! exists $rh->{sEthernet})
+      {
+      _debug(" DDD   but it has no ethernet address.\n");
+      next TRY_ADDR;
+      } # if
+    if (! defined $rh->{sEthernet})
+      {
+      _debug(" DDD   but its ethernet address is undefined.\n");
+      next TRY_ADDR;
+      } # if
+    if ($rh->{sEthernet} eq q{})
+      {
+      _debug(" DDD   but its ethernet address is empty.\n");
+      next TRY_ADDR;
+      } # if
+    $sAddr = $rh->{sEthernet};
+    _debug(" DDD   and its ethernet address is $sAddr.\n");
+    last TRY_ADDR;
     } # foreach TRY_ADDR
   return wantarray ? map { hex } split(/[-:]/, $sAddr) : $sAddr;
   } # get_address
@@ -108,29 +151,26 @@ For example:
    'iActive' => 1,
   },
 
+If any non-zero argument is given,
+debugging information will be printed to STDERR.
+
 =cut
 
 sub get_addresses
   {
-  goto ALL_DONE if @ahInfo;
+  $DEBUG ||= shift;
+  # Short-circuit if this function has already been called:
+  if (! $DEBUG && @ahInfo)
+    {
+    goto ALL_DONE;
+    } # if
   my $sAddr = undef;
   my $rh = Ifconfig('list', '', '', '');
-  if (! defined $rh)
+  if (! defined $rh || (! scalar keys %$rh))
     {
-    warn " EEE ifconfig returned undef: $@";
-    return;
+    warn " EEE Ifconfig failed: $@";
     } # if
-  if (ref($rh) ne 'HASH')
-    {
-    warn " EEE ifconfig returned not a hashref: $@";
-    _debug(" DDD raw output from Ifconfig is ", Dumper($rh));
-    return;
-    } # if
-  if (! scalar keys %$rh)
-    {
-    warn " EEE ifconfig returned an empty hash: $@";
-    return;
-    } # if
+  _debug(" DDD raw output from Ifconfig is ", Dumper($rh));
   # Convert their hashref to our array format:
   foreach my $key (keys %$rh)
     {
@@ -153,7 +193,7 @@ sub get_addresses
       } # if
     $hash{sEthernet} = canonical($sEther);
     $hash{iActive} = 0;
-    if (defined $rh->{$key}->{status} && ($rh->{$key}->{status} =~ m!\A(1|UP)\z!))
+    if (defined $rh->{$key}->{status} && ($rh->{$key}->{status} =~ m!\A(1|UP)\z!i))
       {
       $hash{iActive} = 1;
       } # if
@@ -285,7 +325,9 @@ This software is released under the same license as Perl itself.
 
 __END__
 
-#### This is an example of @asInfo on MSWin32:
+=pod
+
+#### This is an example of @ahInfo on MSWin32:
 (
    {
     'sAdapter' => 'Ethernet adapter Local Area Connection',
@@ -300,7 +342,8 @@ __END__
     'iActive' => 1,
    },
    {
-    'sAdapter' => 'PPP adapter Verizon Online',
+    'sAdapter' => '{gobbledy-gook}',
+    'sDesc' => 'PPP adapter Verizon Online',
     'sEthernet' => '00-53-45-00-00-00',
     'sIP' => '71.24.23.85',
     'iActive' => 1,
