@@ -1,5 +1,8 @@
 
-# $Id: Ethernet.pm,v 1.117 2013-03-26 22:57:38 martin Exp $
+package Net::Address::Ethernet;
+
+use warnings;
+use strict;
 
 =head1 NAME
 
@@ -20,8 +23,6 @@ The following functions will be exported to your namespace if you request :all l
 
 =cut
 
-package Net::Address::Ethernet;
-
 use Carp;
 use Data::Dumper; # for debugging only
 use Exporter;
@@ -30,14 +31,12 @@ use Net::Ifconfig::Wrapper qw( Ifconfig );
 use Regexp::Common;
 use Sys::Hostname;
 
-use strict;
-use warnings;
-
 use constant DEBUG_MATCH => 0;
 
 use vars qw( $DEBUG $VERSION @EXPORT_OK %EXPORT_TAGS );
 use base 'Exporter';
-$VERSION = do { my @r = (q$Revision: 1.117 $ =~ /\d+/g); sprintf "%d."."%03d" x $#r, @r };
+
+$VERSION = 1.118;
 
 $DEBUG = 0 || $ENV{N_A_E_DEBUG};
 
@@ -116,11 +115,22 @@ sub get_addresses
   goto ALL_DONE if @ahInfo;
   my $sAddr = undef;
   my $rh = Ifconfig('list', '', '', '');
-  if (! defined $rh || (! scalar keys %$rh))
+  if (! defined $rh)
     {
-    warn " EEE ifconfig failed: $@";
+    warn " EEE ifconfig returned undef: $@";
+    return;
     } # if
-  _debug(" DDD raw output from Ifconfig is ", Dumper($rh));
+  if (ref($rh) ne 'HASH')
+    {
+    warn " EEE ifconfig returned not a hashref: $@";
+    _debug(" DDD raw output from Ifconfig is ", Dumper($rh));
+    return;
+    } # if
+  if (! scalar keys %$rh)
+    {
+    warn " EEE ifconfig returned an empty hash: $@";
+    return;
+    } # if
   # Convert their hashref to our array format:
   foreach my $key (keys %$rh)
     {
