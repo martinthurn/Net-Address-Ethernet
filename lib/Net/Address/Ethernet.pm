@@ -36,7 +36,7 @@ use constant DEBUG_MATCH => 0;
 use vars qw( $DEBUG $VERSION @EXPORT_OK %EXPORT_TAGS );
 use base 'Exporter';
 
-$VERSION = 1.123;
+$VERSION = 1.124;
 
 $DEBUG = 0 || $ENV{N_A_E_DEBUG};
 
@@ -61,6 +61,34 @@ debugging information will be printed to STDERR.
 
 sub get_address
   {
+  if (0)
+    {
+    # If you know the name of the adapter, you can use this code to
+    # get its IP address:
+    use Socket qw/PF_INET SOCK_DGRAM inet_ntoa sockaddr_in/;
+    if (! socket(SOCKET, PF_INET, SOCK_DGRAM, getprotobyname('ip')))
+      {
+      warn " WWW socket() failed\n";
+      goto IFCONFIG_VERSION;
+      } # if
+    # use ioctl() interface with SIOCGIFADDR.
+    my $ifreq = pack('a32', 'enp1s0');
+    if (! ioctl(SOCKET, 0x8915, $ifreq))
+      {
+      warn " WWW ioctl failed\n";
+      goto IFCONFIG_VERSION;
+      } # if
+    # Format the IP address from the output of ioctl().
+    my $s = inet_ntoa((sockaddr_in((unpack('a16 a16', $ifreq))[1]))[1]);
+    if (! $s)
+      {
+      warn " WWW inet_ntoa failed\n";
+      goto IFCONFIG_VERSION;
+      } # if
+    use Data::Dumper;
+    warn Dumper($s); exit 88; # for debugging
+    } # if 0
+ IFCONFIG_VERSION:
   my @a = get_addresses(@_);
   _debug(" DDD in get_address, a is ", Dumper(\@a));
   # Even if none are active, we'll return the first one:
@@ -177,7 +205,7 @@ sub get_addresses
     my %hash;
     _debug(" DDD working on key $key...\n");
     my $sAdapter = $key;
-    if ($key =~ m!\A{.+}\z!)
+    if ($key =~ m!\A\{.+}\z!)
       {
       $sAdapter = $rh->{$key}->{descr};
       } # if
