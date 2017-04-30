@@ -1,5 +1,5 @@
 
-# $Id: Makefile.PL,v 1.13 2013-03-26 22:56:57 martin Exp $
+use lib '.';
 
 use inc::Module::Install;
 
